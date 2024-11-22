@@ -4,8 +4,6 @@
 
 A 2-bit test ALU that contains 16 different types of calculations with a 4-bit select operation.
 
-![](8bitcpu.svg)
-
 ## How to change the Wokwi project
 
 Edit the [info.yaml](info.yaml) and change the wokwi_id to match your project.
