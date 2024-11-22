@@ -1,59 +1,78 @@
-This project implements an Arithmetic Logic Unit (ALU) that performs basic operations between two 3-bit numbers (in1 and in2). The results are displayed on 7-segment displays. Below is a detailed explanation of each module's functionality and how they integrate.
-
-1. ALU Module
-Description: The ALU (Arithmetic Logic Unit) is the core of the system. It performs arithmetic and logic operations as defined by the operation code op. The four operations are:
-
-SUM (Addition): Adds in1 and in2.
-SUB (Subtraction): Subtracts in2 from in1 if in1 is greater than or equal to in2; if not, it activates the error signal.
-MUL (Multiplication): Multiplies in1 by in2.
-DIV (Division): Divides in1 by in2 if in2 is not zero; otherwise, the error signal is activated.
-Internal Operation: The ALU calculates each operation's result and separates it into tens and units for easier visualization. These values are stored in dec_bin and unis_bin, which represent the tens and units in binary format, respectively.
-
-Flags (Status Signals):
-zero: Indicates if the result is zero.
-error: Indicates if an error occurred (e.g., division by zero or negative subtraction).
-2. Multiplexor2_1 Module
-Description: This 2-to-1 multiplexer selects between two 4-bit inputs (J and K) based on the control signal EL. If EL is 0, it chooses input J; if 1, it selects K. This module is essential for alternating between tens and units on the 7-segment displays.
-
-3. Frequency Divider Module
-Description: The frequency divider adjusts the switching speed between the tens and units on the display, creating a rapid flicker so that both digits appear simultaneously to the human eye.
-
-Internal Operation: This module counts clock pulses in a register q. The output signals q_int1 and q_int2 divide the base clock (mclk), providing a switching signal that controls the alternating display.
-
-4. Multiplex_decoBCD Module
-Description: This module connects the 2-to-1 multiplexer and the BCD (Binary-Coded Decimal) decoder to alternate between tens and units on the 7-segment display. It takes the decimal number from the ALU (separated into tens and units) and sends it to the decoder according to the SEL signal from the frequency divider. This allows both the tens and units to be shown on the same display alternately.
-
-Multiplexor2_1 (Stage 0): Selects between the ALU’s tens and units, switching between them based on SEL.
-BCD Decoder (Stage 1): Converts the BCD number (digit from 0 to 9) to the A-G segments for the display.
-5. BCD Decoder Module
-Description: This decoder converts a 4-bit input (BCD) to a 7-segment display format. Each input combination (W, X, Y, Z) represents a number from 0 to 9, and the decoder activates the corresponding segments to form the desired digit on the display.
-
-Case 4'b0000: Activates segments to show "0" on the display.
-Cases 4'b0001 to 4'b1001: Activates segments for numbers 1 through 9.
-6. ALU_Display Module
-Description: This top-level module integrates all other modules, connecting them and coordinating their functions to achieve the system's overall functionality.
-
+1. Inputs and Outputs of the alu Module
 Inputs:
 
-mclk: Base clock signal.
-in1 and in2: Inputs to the ALU.
-op: 2-bit operation code.
+A and B: 2-bit operands.
+ALU_Sel: 4-bit selection input to choose among 16 operations.
 Outputs:
 
-select_disp: Display selection for showing tens and units.
-AE to GE: Segments of the 7-segment display.
-zero: Zero flag from the ALU.
-error: Error flag from the ALU.
-Internal Operation:
+ALU_Out: 7-bit output for the operation result.
+CarryOut: A single-bit carry-out flag from addition or related operations.
+2. Registers and Assignments
+ALU_Result: A register to hold the computed result temporarily.
+tmp: A wire used to compute the sum of A and B with an extra bit for carry propagation.
+verilog
+assign ALU_Out = ALU_Result; 
+assign tmp = {1'b0, A} + {1'b0, B}; // Add A and B with a 0-padding bit.
+assign CarryOut = tmp[3]; // Carry bit from the addition.
+3. Main ALU Operations
+The operations are implemented using a case statement in the always block, controlled by ALU_Sel:
 
-ALU (Stage 0): Performs the operation specified by op and splits the result into tens (num1mux) and units (num2mux).
-Frequency Divider (Stage 2): Controls the alternating speed between the tens and units so that the display shows both digits in the same position.
-Multiplex_decoBCD (Stage 1): Selects and decodes the numbers num1mux and num2mux into display segments (AE to GE) to display the final value.
-Display Selection (select_disp): The system selects one display at a time using select_disp[0] and select_disp[1] to alternate between tens and units. Bits select_disp[2] and select_disp[3] are held high to keep the other displays off.
+Arithmetic Operations:
 
-Summary of the Complete Operation
-ALU Operation: The ALU receives two 3-bit numbers (in1 and in2) and an operation code (op) and performs the specified operation.
-Result Decomposition: The ALU converts the result into tens and units, which are the digits to be displayed.
-Display Alternation: The frequency divider alternates quickly between tens and units. This flicker is imperceptible to the human eye, making both digits appear to display simultaneously.
-Multiplexing and BCD Decoding: The multiplexer selects between tens and units, and the BCD decoder converts the value to display segments.
-Display Output: Finally, the 7-segment display shows the result, while the zero and error flags indicate if the result is zero or if there was an error in the operation.
+Addition: ALU_Result = A + B;
+Subtraction: ALU_Result = A - B;
+Multiplication and division with additional factors (ALU_Gen, grant3, grant4).
+Logical Operations:
+
+AND, OR, XOR, NOR, NAND, XNOR.
+Comparison: Greater than or equal checks.
+Shifting and Rotations:
+
+Logical shifts (A << 1, A >> 1).
+Rotations ({A[1:0], A[1]} for left rotation and {A[0], A[1:0]} for right rotation).
+4. Submodules and Their Functionality
+Ripple Carry Adder (ripple_carry_adder):
+
+A cascaded addition mechanism implemented using 1-bit full adders. It handles bitwise addition for operations.
+Full Adder (fulladder):
+
+Adds two single bits along with a carry-in:
+verilog
+assign S = X1 ^ X2 ^ Cin; // Sum output.
+assign Cout = (X1 & X2) | (Cin & (X1 ^ X2)); // Carry-out.
+FSM (fsm_using_single_always):
+
+Implements a finite state machine (FSM) for handling signals like grant1, grant2, grant3, and grant4, which influence certain ALU operations.
+5. FSM (fsm_using_single_always)
+This FSM provides priority-based grant signals (gnt_0 and gnt_1) based on requests (req_0 and req_1), enabling controlled data processing. The FSM transitions between states (state) to manage the requests and grants efficiently.
+
+6. Testbench (tb_alu)
+The testbench verifies the ALU functionality by simulating various test cases:
+
+Sets different values for A, B, and ALU_Sel.
+Observes the results (ALU_Out and CarryOut) to ensure correctness.
+Example:
+
+verilog
+A = 2'b10; B = 2'b01; ALU_Sel = 4'b0000; // Test addition.
+#20;
+A = 2'b11; B = 2'b10; ALU_Sel = 4'b0011; // Test division.
+7. ALU Integration in alu_top
+The alu_top module maps external input signals (io_in) to the ALU's inputs:
+
+Bits [7:6] and [5:4] represent A and B, respectively.
+Bits [3:0] represent ALU_Sel.
+Outputs are similarly mapped to io_out.
+
+8. Supporting Logical Modules
+The design includes several primitive modules for fundamental logic operations:
+
+and_cell, or_cell, xor_cell, nand_cell, etc., for basic Boolean functions.
+Multiplexers (mux_cell) and flip-flops (dff_cell) for data flow control.
+9. Conclusion
+This ALU is designed with modularity and reusability in mind:
+
+Arithmetic and logical functionalities are separate.
+FSM manages request-grant scenarios efficiently.
+The testbench ensures robust verification, and the design is well-suited for integration into larger digital systems.
+By following the modular approach, it’s easier to debug, modify, or extend the ALU for more complex operations or higher bit-width data.
